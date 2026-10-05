@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#18251b">
+<title>EU: Price of Power — Location Finder</title>
+<style>
+:root{--bg:#f2efe5;--ink:#172018;--card:#fffdf6;--accent:#355b3d;--muted:#687268;--line:#d7d4c9}
+*{box-sizing:border-box} body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--ink)}
+header{background:#18251b;color:white;padding:calc(22px + env(safe-area-inset-top)) 20px 22px}
+header h1{font-family:Georgia,serif;margin:0;font-size:25px} header p{margin:7px 0 0;color:#d8dfd8;font-size:14px}
+main{max-width:720px;margin:auto;padding:20px 16px 50px}
+.search{position:sticky;top:0;background:linear-gradient(var(--bg) 78%,transparent);padding:8px 0 18px;z-index:2}
+input{width:100%;font-size:18px;padding:16px 17px;border:1px solid #bbb8ad;border-radius:13px;background:white;outline:none;box-shadow:0 2px 10px #0000000c}
+input:focus{border-color:var(--accent);box-shadow:0 0 0 3px #355b3d22}
+.meta{font-size:13px;color:var(--muted);margin:0 3px 10px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;margin:10px 0;box-shadow:0 2px 8px #00000008}
+.row{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
+.name{font-family:Georgia,serif;font-size:21px;font-weight:700}
+.badge{font-size:12px;text-transform:uppercase;letter-spacing:.05em;background:#e2eadf;color:#29472f;padding:5px 8px;border-radius:999px;white-space:nowrap}
+.details{display:grid;grid-template-columns:92px 1fr;gap:7px 10px;margin-top:13px;font-size:14px}
+.label{color:var(--muted)} .empty{text-align:center;padding:45px 15px;color:var(--muted)}
+.notice{font-size:12px;color:var(--muted);margin-top:20px;line-height:1.45}
+</style>
+</head>
+<body>
+<header>
+  <h1>Europa Universalis Location Finder</h1>
+  <p>Prototype companion for The Price of Power</p>
+</header>
+<main>
+ <div class="search">
+  <input id="q" type="search" autocomplete="off" placeholder="Find a location…" aria-label="Find a location">
+ </div>
+ <div id="meta" class="meta"></div>
+ <div id="results"></div>
+ <p class="notice">Prototype data only. This sample demonstrates the search interface and data structure; it does not reproduce the game's protected map artwork or full proprietary dataset.</p>
+</main>
+<script>
+const data=[
+{name:"Paris",type:"Province",realm:"France",area:"Île-de-France",trade:"Western Europe",aliases:["paris region","ile de france"],ref:"Sample reference"},
+{name:"London",type:"Province",realm:"England",area:"Southern England",trade:"English Channel",aliases:["london"],ref:"Sample reference"},
+{name:"Venice",type:"Province",realm:"Venice",area:"Northern Italy",trade:"Mediterranean",aliases:["venezia"],ref:"Sample reference"},
+{name:"Saxony",type:"Realm",realm:"Saxony",area:"Central Europe",trade:"Central Europe",aliases:["sachsen"],ref:"Sample reference"},
+{name:"Burgundy",type:"Realm",realm:"Burgundy",area:"Western Europe",trade:"Western Europe",aliases:["bourgogne"],ref:"Sample reference"},
+{name:"Bohemia",type:"Realm",realm:"Bohemia",area:"Central Europe",trade:"Central Europe",aliases:["czech lands"],ref:"Sample reference"},
+{name:"Württemberg",type:"Realm",realm:"Württemberg",area:"Southern Germany",trade:"Central Europe",aliases:["wurttemberg","wuerttemberg","wurtemberg"],ref:"Sample reference"},
+{name:"Genoa",type:"Province",realm:"Genoa",area:"Northern Italy",trade:"Mediterranean",aliases:["genova"],ref:"Sample reference"},
+{name:"Lisbon",type:"Province",realm:"Portugal",area:"Iberia",trade:"Atlantic",aliases:["lisboa"],ref:"Sample reference"},
+{name:"Constantinople",type:"Province",realm:"Ottoman Empire",area:"Balkans / Anatolia",trade:"Eastern Mediterranean",aliases:["istanbul","byzantium"],ref:"Sample reference"},
+{name:"Baltic Sea",type:"Sea Zone",realm:"—",area:"Northern Europe",trade:"Baltic",aliases:["baltic"],ref:"Sample reference"},
+{name:"English Channel",type:"Trade Node",realm:"—",area:"Western Europe",trade:"English Channel",aliases:["channel"],ref:"Sample reference"}
+];
+
+const norm=s=>s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z0-9 ]/g,"");
+function lev(a,b){a=norm(a);b=norm(b);const m=Array.from({length:a.length+1},(_,i)=>[i]);for(let j=1;j<=b.length;j++)m[0][j]=j;for(let i=1;i<=a.length;i++)for(let j=1;j<=b.length;j++)m[i][j]=Math.min(m[i-1][j]+1,m[i][j-1]+1,m[i-1][j-1]+(a[i-1]!==b[j-1]));return m[a.length][b.length]}
+function score(x,q){
+ const fields=[x.name,x.type,x.realm,x.area,x.trade,...x.aliases].map(norm), n=norm(q);
+ if(!n)return 0;
+ if(norm(x.name)===n)return 100;
+ if(fields.some(v=>v.startsWith(n)))return 85;
+ if(fields.some(v=>v.includes(n)))return 70;
+ const d=Math.min(...fields.map(v=>lev(v,n)));
+ return d<=Math.max(2,Math.floor(n.length*.3))?50-d:0;
+}
+function esc(s){return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
+function render(){
+ const q=document.querySelector("#q").value.trim();
+ let items=q?data.map(x=>[x,score(x,q)]).filter(x=>x[1]>0).sort((a,b)=>b[1]-a[1]).map(x=>x[0]):data.slice(0,6);
+ document.querySelector("#meta").textContent=q?`${items.length} match${items.length===1?"":"es"}`:"Try a province, realm, sea zone, or trade node";
+ document.querySelector("#results").innerHTML=items.length?items.map(x=>`
+ <article class="card">
+  <div class="row"><div class="name">${esc(x.name)}</div><div class="badge">${esc(x.type)}</div></div>
+  <div class="details">
+   <div class="label">Realm</div><div>${esc(x.realm)}</div>
+   <div class="label">Area</div><div>${esc(x.area)}</div>
+   <div class="label">Trade</div><div>${esc(x.trade)}</div>
+   <div class="label">Map ref.</div><div>${esc(x.ref)}</div>
+  </div>
+ </article>`).join(""):`<div class="empty">No match. Try another spelling.</div>`;
+}
+document.querySelector("#q").addEventListener("input",render); render();
+</script>
+</body>
+</html>
